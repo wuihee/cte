@@ -1,3 +1,7 @@
+use crate::database::init;
+
+mod database;
+
 fn main() {
-    println!("Hello, world!");
+    let _connection = init();
 }
