@@ -1,11 +1,10 @@
 mod database;
-mod engine;
+mod domain;
+mod espn;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let _connection = database::init();
-
-    let espn = engine::espn::Espn::new();
+    let espn = espn::Espn::new();
     let result = espn.get_all_events(2024).await?;
 
     println!("{result:?}");

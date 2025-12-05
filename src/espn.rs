@@ -1,13 +1,15 @@
-//! # ESPN API Client
+//! # ESPN
 //!
 //! This module provides a small wrapper around ESPN's public UFC API. It is
 //! responsible for sending requests and parsing responses into strongly typed
 //! DTOs.
 
+pub mod dto;
+
 use anyhow::Result;
 use reqwest::Client;
 
-use crate::engine::dto::{EventsDto, FightCardDto};
+use crate::espn::dto::{EventsDto, FightCardDto};
 
 /// A lightweight client for fetching UFC-related data from ESPN's API.
 pub struct Espn {

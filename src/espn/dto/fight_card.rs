@@ -1,24 +1,8 @@
-//! # DTO
+//! # Fight Card DTO
 //!
-//! This module defines the data transfer objects (DTOs) used to deserialize
-//! the portion of the ESPN UFC event API that we care about.
+//! DTO for the fight card endpoint.
 
 use serde::Deserialize;
-
-/// Represents a list of UFC events.
-#[derive(Debug, Deserialize)]
-pub struct EventsDto {
-    pub count: usize,
-    pub items: Vec<EventDto>,
-}
-
-/// Represents a single UFC event.
-#[derive(Debug, Deserialize)]
-pub struct EventDto {
-    pub id: String,
-    pub date: String,
-    pub name: String,
-}
 
 /// Represents the root of the parsed UFC event payload.
 #[derive(Debug, Deserialize)]
