@@ -1,20 +1,26 @@
 //! # Database
 //!
-//! This module contains the schema and setup for a database of UFC fighters,
-//! fights, and ratings.
+//! Provides a unified entry point for accessing the application's database.
 
-use rusqlite::{Connection, Result};
+use sqlx::{Result, SqlitePool};
 
-mod schema;
-
+/// Encapsulates the applications main database connection via [`SqlitePool`].
 pub struct Database {
-    connection: Connection,
+    /// Will be passed to sqlx queries to perform database operations.
+    pub pool: SqlitePool,
 }
 
 impl Database {
-    pub fn new() -> Result<Self> {
-        let connection = Connection::open("data/app.db")?;
-        schema::create_tables(&connection)?;
-        Ok(Self { connection })
+    const DATABASE_URL: &'static str = "sqlite:data/app.db";
+
+    /// Connects to the database and ensures migrations are up to date
+    ///
+    /// # Returns
+    ///
+    /// A [`Database`] instance ready to process queries.
+    pub async fn new() -> Result<Self> {
+        let pool = SqlitePool::connect(Database::DATABASE_URL).await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+        Ok(Self { pool })
     }
 }
