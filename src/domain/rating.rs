@@ -5,6 +5,9 @@
 /// Represents a fighter's rating after a fight.
 #[derive(Debug, Clone)]
 pub struct Rating {
+    /// The ID for this rating.
+    pub id: i32,
+
     /// The fighter's ID.
     pub fighter_id: i32,
 

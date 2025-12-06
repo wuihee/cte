@@ -1,1 +1,37 @@
--- Add migration script here
+CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    date DATE NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS fighters (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS fights (
+    id INTEGER PRIMARY KEY,
+    event_id INTEGER NOT NULL,
+    winner_id INTEGER NOT NULL,
+    loser_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+    FOREIGN KEY (winner_id) REFERENCES fighters(id) ON DELETE CASCADE,
+    FOREIGN KEY (loser_id) REFERENCES fighters(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS ratings (
+    id INTEGER PRIMARY KEY,
+    fighter_id INTEGER NOT NULL,
+    fight_id INTEGER NOT NULL,
+    rating REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (fighter_id) REFERENCES fighters(id),
+    FOREIGN KEY (fight_id) REFERENCES fights(id),
+
+    UNIQUE (fighter_id, fight_id)
+);
