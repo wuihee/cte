@@ -124,4 +124,37 @@ impl Database {
         .await?;
         Ok(())
     }
+
+    /// Insert a rating for a UFC fighter after a certain fight.
+    ///
+    /// Skip if rating already exists.
+    ///
+    /// # Arguments
+    ///
+    /// - `fighter_id`: Fighter's ID.
+    /// - `fight_id`: Fight's ID.
+    /// - `rating`: The rating of the fighter after the fight.
+    ///
+    /// # Returns
+    ///
+    /// `Ok` if successfully inserted, else `Err`.
+    pub async fn insert_rating(
+        &self,
+        fighter_id: &str,
+        fight_id: &str,
+        rating: f64,
+    ) -> sqlx::Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT OR IGNORE INTO ratings (fighter_id, fight_id, rating)
+            VALUES ($1, $2, $3)
+            "#,
+            fighter_id,
+            fight_id,
+            rating,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
