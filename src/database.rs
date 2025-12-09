@@ -2,6 +2,8 @@
 //!
 //! Provides a unified entry point for accessing the application's database.
 
+pub mod entities;
+
 use std::env;
 
 use sqlx::SqlitePool;
