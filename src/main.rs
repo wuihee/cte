@@ -1,17 +1,15 @@
 mod database;
 mod domain;
+mod engine;
 mod espn;
 
-use database::Database;
+use crate::{database::Database, engine::sync_fight_data};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let database = Database::new();
+    let database = Database::new().await?;
 
-    let espn = espn::Espn::new();
-    let result = espn.get_all_events(2024).await?;
-
-    // println!("{result:?}");
+    sync_fight_data(&database).await?;
 
     Ok(())
 }

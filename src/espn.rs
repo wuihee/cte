@@ -76,7 +76,7 @@ impl Espn {
     /// # Returns
     ///
     /// A deserialized `FightCardDto` or an error on failure.
-    pub async fn get_fight_card(&self, event_id: i32) -> Result<FightCardDto> {
+    pub async fn get_fight_card(&self, event_id: &str) -> Result<FightCardDto> {
         let url = format!("{}/{event_id}", Espn::BASE_FIGHT_CARD_URL);
         let fight_card = self
             .client
