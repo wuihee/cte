@@ -1,6 +1,12 @@
-# Combat Training Engine (CTE)
+# Combat Training Engine
+
+In light of ranking controversies, the goal of this project is to algorithmically calculate rankings for UFC fighters based on some elo-like algorithm.
 
 ## Usage
+
+```sh
+cargo run
+```
 
 ### Environment Variables
 
@@ -11,11 +17,6 @@ Create a `.env` file with the following environment variables.
 DATABASE_URL=sqlite:data/app.db
 ```
 
-## Architecture
+## Resources
 
-## TODO
-
-- ESPN API to get all seasons / years.
-- Run asynchronously with batching and transactions?
-- Insert date instead of letting sqlite automatically convert?
-- Only insert if fight actually happened?
+- [ESPN WADL](https://sports.core.api.espn.com/v3/application.wadl?detail=true): Describes ESPN's API.
