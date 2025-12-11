@@ -4,6 +4,15 @@ In light of ranking controversies, the goal of this project is to algorithmicall
 
 ## Usage
 
+Run `setup.sh` to setup sqlite database.
+
+```sh
+chmod u+x setup.sh
+./setup.sh
+```
+
+Run the engine.
+
 ```sh
 cargo run
 ```
