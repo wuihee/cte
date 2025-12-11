@@ -67,6 +67,7 @@ async fn insert_card(database: &Database, event: &EventDto, card: &CardDto) -> a
                     &event.id,
                     &competitor_1.athlete.id,
                     &competitor_2.athlete.id,
+                    &event.date,
                 )
                 .await?;
         } else {
@@ -76,6 +77,7 @@ async fn insert_card(database: &Database, event: &EventDto, card: &CardDto) -> a
                     &event.id,
                     &competitor_2.athlete.id,
                     &competitor_1.athlete.id,
+                    &event.date,
                 )
                 .await?;
         }

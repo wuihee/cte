@@ -3,6 +3,7 @@
 //! DTO for the endpoint to get all events.
 
 use serde::Deserialize;
+use time::OffsetDateTime;
 
 /// Represents a list of UFC events.
 #[derive(Debug, Deserialize)]
@@ -14,6 +15,9 @@ pub struct EventsDto {
 #[derive(Debug, Deserialize)]
 pub struct EventDto {
     pub id: String,
-    pub date: String,
+
+    #[serde(with = "time::serde::iso8601")]
+    pub date: OffsetDateTime,
+
     pub name: String,
 }

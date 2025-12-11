@@ -7,6 +7,9 @@ pub mod entities;
 use std::env;
 
 use sqlx::SqlitePool;
+use time::OffsetDateTime;
+
+use crate::database::entities::{Fight, Fighter};
 
 /// Encapsulates the applications main database connection via [`SqlitePool`].
 pub struct Database {
@@ -49,7 +52,12 @@ impl Database {
     /// # Returns
     ///
     /// `Ok` if successfully inserted, else `Err`.
-    pub async fn insert_event(&self, id: &str, name: &str, date: &str) -> sqlx::Result<()> {
+    pub async fn insert_event(
+        &self,
+        id: &str,
+        name: &str,
+        date: &OffsetDateTime,
+    ) -> sqlx::Result<()> {
         sqlx::query!(
             r#"
             INSERT OR IGNORE INTO events (id, name, date)
@@ -111,16 +119,18 @@ impl Database {
         event_id: &str,
         winner_id: &str,
         loser_id: &str,
+        date: &OffsetDateTime,
     ) -> sqlx::Result<()> {
         sqlx::query!(
             r#"
-            INSERT OR IGNORE INTO fights (id, event_id, winner_id, loser_id)
-            VALUES ($1, $2, $3, $4)
+            INSERT OR IGNORE INTO fights (id, event_id, winner_id, loser_id, date)
+            VALUES ($1, $2, $3, $4, $5)
             "#,
             id,
             event_id,
             winner_id,
             loser_id,
+            date,
         )
         .execute(&self.pool)
         .await?;
@@ -142,8 +152,8 @@ impl Database {
     /// `Ok` if successfully inserted, else `Err`.
     pub async fn insert_rating(
         &self,
-        fighter_id: &str,
-        fight_id: &str,
+        fighter_id: i64,
+        fight_id: i64,
         rating: f64,
     ) -> sqlx::Result<()> {
         sqlx::query!(
@@ -154,6 +164,69 @@ impl Database {
             fighter_id,
             fight_id,
             rating,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Get all fights ordered by date in ascending order.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec` of [`Fight`] on success, else `Err`.
+    pub async fn get_fights_order_by_date(&self) -> sqlx::Result<Vec<Fight>> {
+        let fight = sqlx::query_as!(
+            Fight,
+            r#"
+            SELECT id, event_id, winner_id, loser_id, date
+            FROM fights
+            ORDER BY date ASC
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(fight)
+    }
+
+    /// Get a fighter by their ID.
+    ///
+    /// # Arguments
+    ///
+    /// - `id`: Fighter's ID.
+    ///
+    /// # Returns
+    ///
+    /// `Ok(Fighter)` on success, else `Err`.
+    pub async fn get_fighter(&self, id: i64) -> sqlx::Result<Fighter> {
+        let fighter = sqlx::query_as!(
+            Fighter,
+            r#"
+            SELECT id, name, rating, max_rating FROM fighters
+            WHERE id = $1
+            "#,
+            id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(fighter)
+    }
+
+    pub async fn update_figher_rating(
+        &self,
+        id: i64,
+        rating: f64,
+        max_rating: f64,
+    ) -> sqlx::Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE fighters
+            SET rating = $1, max_rating = $2
+            WHERE id = $3
+            "#,
+            rating,
+            max_rating,
+            id,
         )
         .execute(&self.pool)
         .await?;
