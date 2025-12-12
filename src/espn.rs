@@ -89,3 +89,22 @@ impl Espn {
         Ok(fight_card)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::espn::Espn;
+
+    #[tokio::test]
+    async fn test_get_all_events() {
+        let espn = Espn::new();
+        let result = espn.get_all_events(2024).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_get_fight_card() {
+        let espn = Espn::new();
+        let result = espn.get_fight_card("600039753").await;
+        assert!(result.is_ok());
+    }
+}
