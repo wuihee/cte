@@ -25,8 +25,7 @@ impl Espn {
     /// ```sh
     /// curl https://sports.core.api.espn.com/v3/sports/mma/ufc/events?season=2024
     /// ```
-    const BASE_EVENTS_URL: &'static str =
-        "https://sports.core.api.espn.com/v3/sports/mma/ufc/events";
+    const EVENTS_API: &'static str = "https://sports.core.api.espn.com/v3/sports/mma/ufc/events";
 
     /// Base endpoint for retrieving data for a single fight card.
     ///
@@ -35,7 +34,7 @@ impl Espn {
     /// ```
     /// curl https://site.web.api.espn.com/apis/common/v3/sports/mma/ufc/fightcenter/600043333
     /// ```
-    const BASE_FIGHT_CARD_URL: &'static str =
+    const FIGHT_CARD_API: &'static str =
         "https://site.web.api.espn.com/apis/common/v3/sports/mma/ufc/fightcenter";
 
     /// Creates a new ESPN API client with a default `reqwest::Client`.
@@ -55,7 +54,7 @@ impl Espn {
     ///
     /// A deserialized `EventsDto` or an error on failure.
     pub async fn get_all_events(&self, year: i32) -> Result<EventsDto> {
-        let url = format!("{}?season={year}", Espn::BASE_EVENTS_URL);
+        let url = format!("{}?season={year}", Espn::EVENTS_API);
         let events = self
             .client
             .get(&url)
@@ -77,7 +76,7 @@ impl Espn {
     ///
     /// A deserialized `FightCardDto` or an error on failure.
     pub async fn get_fight_card(&self, event_id: &str) -> Result<FightCardDto> {
-        let url = format!("{}/{event_id}", Espn::BASE_FIGHT_CARD_URL);
+        let url = format!("{}/{event_id}", Espn::FIGHT_CARD_API);
         let fight_card = self
             .client
             .get(&url)
