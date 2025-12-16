@@ -1,6 +1,6 @@
 # Combat Training Engine
 
-In light of ranking controversies, the goal of this project is to algorithmically calculate rankings for UFC fighters based on some elo-like algorithm.
+The goal of this project is to algorithmically calculate rankings for UFC fighters based on some elo-like algorithm.
 
 ## Usage
 
@@ -11,10 +11,16 @@ chmod u+x setup.sh
 ./setup.sh
 ```
 
-Run the engine.
+Run the engine to sync fight data and calculate ratings:
 
 ```sh
 cargo run
+```
+
+Run tests:
+
+```sh
+cargo test
 ```
 
 ### Environment Variables
@@ -25,6 +31,8 @@ Create a `.env` file with the following environment variables.
 # Path or connection string for the SQLite database.
 DATABASE_URL=sqlite:data/app.db
 ```
+
+## Algorithm
 
 ## Resources
 
