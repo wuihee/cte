@@ -109,6 +109,9 @@ impl Database {
     ///               provided by ESPN.
     /// - `winner_id`: The fighter ID of the winner.
     /// - `loser_id`: The fighter ID of the loser.
+    /// - `fight_time`: How long the fight took in seconds.
+    /// - `weight_class`: Weight class the fight took place at.
+    /// - `finish_method`: How the fight was finished.
     ///
     /// # Returns
     ///
@@ -120,17 +123,32 @@ impl Database {
         winner_id: &str,
         loser_id: &str,
         date: &OffsetDateTime,
+        fight_time: u32,
+        weight_class: &str,
+        finish_method: &str,
     ) -> sqlx::Result<()> {
         sqlx::query!(
             r#"
-            INSERT OR IGNORE INTO fights (id, event_id, winner_id, loser_id, date)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT OR IGNORE INTO fights (
+                id,
+                event_id,
+                winner_id,
+                loser_id,
+                date,
+                fight_time,
+                weight_class,
+                finish_method
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             id,
             event_id,
             winner_id,
             loser_id,
             date,
+            fight_time,
+            weight_class,
+            finish_method,
         )
         .execute(&self.pool)
         .await?;
@@ -164,6 +182,60 @@ impl Database {
             fighter_id,
             fight_id,
             rating,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn insert_fight_stat(
+        &self,
+        fighter_id: i64,
+        fight_id: i64,
+        knock_downs: u32,
+        total_strikes_hit: u32,
+        total_strikes_missed: u32,
+        sig_strikes: u32,
+        head_strikes: u32,
+        body_strikes: u32,
+        leg_strikes: u32,
+        time_in_control: u32,
+        takedowns_hit: u32,
+        submissions_hit: u32,
+        submissions_missed: u32,
+    ) -> sqlx::Result<()> {
+        sqlx::query!(
+            r#"
+            INSERT OR IGNORE INTO fight_stats (
+                fighter_id,
+                fight_id,
+                knock_downs,
+                total_strikes_hit,
+                total_strikes_missed,
+                sig_strikes,
+                head_strikes,
+                body_strikes,
+                leg_strikes,
+                time_in_control,
+                takedowns_hit,
+                submissions_hit,
+                submissions_missed
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            "#,
+            fighter_id,
+            fight_id,
+            knock_downs,
+            total_strikes_hit,
+            total_strikes_missed,
+            sig_strikes,
+            head_strikes,
+            body_strikes,
+            leg_strikes,
+            time_in_control,
+            takedowns_hit,
+            submissions_hit,
+            submissions_missed,
         )
         .execute(&self.pool)
         .await?;
