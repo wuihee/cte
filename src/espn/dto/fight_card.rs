@@ -35,13 +35,13 @@ pub struct CompetitionDto {
 #[derive(Debug, Deserialize)]
 pub struct StatusDto {
     pub clock: String,
-    pub period: u8,
+    pub period: u32,
     pub result: ResultDto,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ResultDto {
-    // TODO: Use enum
+    /// kotko, sub, u-dec, s-dec, no contest, draw, etc.
     pub name: String,
 }
 
@@ -64,51 +64,15 @@ pub struct AthleteDto {
 
 #[derive(Debug, Deserialize)]
 pub struct WeightClassDto {
-    pub slug: WeightClass,
+    /// Lightweight, etc.
+    pub slug: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StatsDto {
-    pub name: Criteria,
+    /// Significant strikes, time in control, etc.
+    pub name: String,
     pub value: f64,
     pub display_value: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum Gender {
-    Male,
-    Female,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum WeightClass {
-    Flyweight,
-    Bantamweight,
-    Featherweight,
-    Lightweight,
-    Welterweight,
-    Middleweight,
-    LightHeavyweight,
-    Heavyweight,
-    OpenWeight,
-    WomensStrawweight,
-    WomensFlyweight,
-    WomensBantamweight,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum Criteria {
-    KnockDowns,
-    TotalStrikes,
-    SigStrikes,
-    HeadStrikes,
-    BodyStrikes,
-    LegStrikes,
-    TimeInControl,
-    Takedowns,
-    Submissions,
 }
