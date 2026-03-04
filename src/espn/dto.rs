@@ -6,5 +6,5 @@
 pub mod events;
 pub mod fight_card;
 
-pub use events::EventsDto;
+pub use events::{EventDto, EventsDto};
 pub use fight_card::FightCardDto;

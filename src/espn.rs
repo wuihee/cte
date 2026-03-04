@@ -8,8 +8,9 @@ pub mod dto;
 
 use anyhow::Result;
 use reqwest::Client;
+use time::OffsetDateTime;
 
-use crate::espn::dto::{EventsDto, FightCardDto};
+use crate::espn::dto::{EventDto, EventsDto, FightCardDto};
 
 /// A lightweight client for fetching UFC-related data from ESPN's API.
 pub struct Espn {
@@ -31,7 +32,7 @@ impl Espn {
     ///
     /// # Example
     ///
-    /// ```
+    /// ```sh
     /// curl https://site.web.api.espn.com/apis/common/v3/sports/mma/ufc/fightcenter/600043333
     /// ```
     const FIGHT_CARD_API: &'static str =
@@ -86,6 +87,34 @@ impl Espn {
             .json::<FightCardDto>()
             .await?;
         Ok(fight_card)
+    }
+
+    /// Fetches upcoming UFC events (events with dates in the future).
+    ///
+    /// # Returns
+    ///
+    /// A vector of upcoming `EventDto` sorted by date, or an error on failure.
+    pub async fn get_upcoming_events(&self) -> Result<Vec<EventDto>> {
+        let now = OffsetDateTime::now_utc();
+        let current_year = now.year();
+
+        let mut upcoming = Vec::new();
+
+        // Check current year and next year for upcoming events
+        for year in [current_year, current_year + 1] {
+            if let Ok(events) = self.get_all_events(year).await {
+                for event in events.items {
+                    if event.date > now {
+                        upcoming.push(event);
+                    }
+                }
+            }
+        }
+
+        // Sort by date
+        upcoming.sort_by(|a, b| a.date.cmp(&b.date));
+
+        Ok(upcoming)
     }
 }
 
