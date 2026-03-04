@@ -6,12 +6,19 @@
 //! that affect how ratings change after each fight.
 
 use std::fmt;
+use std::fs;
+use std::path::Path;
+
+use serde::{Deserialize, Serialize};
+
+/// Default path for the config file.
+pub const CONFIG_FILE_PATH: &str = "data/elo_config.json";
 
 /// Configuration parameters for the Elo rating system.
 ///
 /// These parameters control how much ratings change after fights
 /// and how different fight contexts affect the magnitude of changes.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EloConfig {
     /// Base K-factor for rating changes.
     /// Higher values mean more volatile ratings.
@@ -69,6 +76,77 @@ impl EloConfig {
             title_fight_multiplier: 1.05,
             five_round_multiplier: 1.05,
         }
+    }
+
+    /// Loads the configuration from the default file path.
+    ///
+    /// If the file doesn't exist, returns the default configuration.
+    pub fn load() -> Self {
+        Self::load_from(CONFIG_FILE_PATH)
+    }
+
+    /// Loads the configuration from a specific file path.
+    ///
+    /// If the file doesn't exist or is invalid, returns the default configuration.
+    pub fn load_from<P: AsRef<Path>>(path: P) -> Self {
+        match fs::read_to_string(path) {
+            Ok(contents) => serde_json::from_str(&contents).unwrap_or_default(),
+            Err(_) => Self::default(),
+        }
+    }
+
+    /// Saves the configuration to the default file path.
+    ///
+    /// Creates the parent directory if it doesn't exist.
+    pub fn save(&self) -> std::io::Result<()> {
+        self.save_to(CONFIG_FILE_PATH)
+    }
+
+    /// Saves the configuration to a specific file path.
+    ///
+    /// Creates the parent directory if it doesn't exist.
+    pub fn save_to<P: AsRef<Path>>(&self, path: P) -> std::io::Result<()> {
+        let path = path.as_ref();
+
+        // Create parent directory if needed
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        fs::write(path, json)
+    }
+
+    /// Checks if a saved configuration exists.
+    pub fn exists() -> bool {
+        Path::new(CONFIG_FILE_PATH).exists()
+    }
+
+    /// Deletes the saved configuration file (resets to default).
+    pub fn reset() -> std::io::Result<()> {
+        if Self::exists() {
+            fs::remove_file(CONFIG_FILE_PATH)
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Returns a short summary string for display in UI.
+    pub fn summary(&self) -> String {
+        format!(
+            "K={:.0} F={:.2} T={:.2} 5R={:.2}",
+            self.k_factor,
+            self.finish_multiplier,
+            self.title_fight_multiplier,
+            self.five_round_multiplier
+        )
+    }
+
+    /// Checks if this config differs from the default.
+    pub fn is_custom(&self) -> bool {
+        *self != Self::default()
     }
 }
 
@@ -163,6 +241,12 @@ impl ParameterRanges {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+
+    fn test_config_path() -> PathBuf {
+        PathBuf::from("test_elo_config.json")
+    }
 
     #[test]
     fn test_default_config() {
@@ -171,6 +255,51 @@ mod tests {
         assert_eq!(config.finish_multiplier, 1.0);
         assert_eq!(config.title_fight_multiplier, 1.0);
         assert_eq!(config.five_round_multiplier, 1.0);
+    }
+
+    #[test]
+    fn test_config_serialization() {
+        let config = EloConfig::new(50.0, 1.2, 1.1, 1.05);
+        let json = serde_json::to_string(&config).unwrap();
+        let loaded: EloConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(config, loaded);
+    }
+
+    #[test]
+    fn test_config_save_load() {
+        let path = test_config_path();
+        let config = EloConfig::new(60.0, 1.3, 1.15, 1.1);
+
+        // Save
+        config.save_to(&path).unwrap();
+
+        // Load
+        let loaded = EloConfig::load_from(&path);
+        assert_eq!(config, loaded);
+
+        // Cleanup
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn test_load_missing_file() {
+        let config = EloConfig::load_from("nonexistent_file.json");
+        assert_eq!(config, EloConfig::default());
+    }
+
+    #[test]
+    fn test_is_custom() {
+        let default = EloConfig::default();
+        assert!(!default.is_custom());
+
+        let custom = EloConfig::new(50.0, 1.2, 1.1, 1.05);
+        assert!(custom.is_custom());
+    }
+
+    #[test]
+    fn test_summary() {
+        let config = EloConfig::new(50.0, 1.20, 1.10, 1.05);
+        assert_eq!(config.summary(), "K=50 F=1.20 T=1.10 5R=1.05");
     }
 
     #[test]

@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use crate::{
     database::Database,
     engine::{
-        EloConfig, Optimizer, ParameterRanges, SyncOptions, export_results_to_csv,
+        Backtester, EloConfig, Optimizer, ParameterRanges, SyncOptions, export_results_to_csv,
         print_top_results, sync_fight_data, update_ratings,
     },
     tui::run_app,
@@ -60,6 +60,10 @@ enum Command {
         /// Number of top results to display
         #[arg(short, long, default_value = "10")]
         top: usize,
+
+        /// Apply the best config after optimization
+        #[arg(short, long)]
+        apply: bool,
     },
 
     /// Run a backtest with specific parameters
@@ -80,6 +84,33 @@ enum Command {
         #[arg(long, default_value = "1.0")]
         five_round: f64,
     },
+
+    /// Show or manage the active Elo configuration
+    Config {
+        /// Show current config
+        #[arg(short, long)]
+        show: bool,
+
+        /// Reset config to defaults
+        #[arg(short, long)]
+        reset: bool,
+
+        /// Set K-factor
+        #[arg(long)]
+        k_factor: Option<f64>,
+
+        /// Set finish multiplier
+        #[arg(long)]
+        finish: Option<f64>,
+
+        /// Set title fight multiplier
+        #[arg(long)]
+        title: Option<f64>,
+
+        /// Set five-round multiplier
+        #[arg(long)]
+        five_round: Option<f64>,
+    },
 }
 
 #[tokio::main]
@@ -99,8 +130,9 @@ async fn main() -> anyhow::Result<()> {
                 seed,
                 export,
                 top,
+                apply,
             } => {
-                run_optimize(&database, &method, samples, seed, export, top).await?;
+                run_optimize(&database, &method, samples, seed, export, top, apply).await?;
             }
             Command::Backtest {
                 k_factor,
@@ -109,6 +141,16 @@ async fn main() -> anyhow::Result<()> {
                 five_round,
             } => {
                 run_backtest(&database, k_factor, finish, title, five_round).await?;
+            }
+            Command::Config {
+                show,
+                reset,
+                k_factor,
+                finish,
+                title,
+                five_round,
+            } => {
+                run_config(show, reset, k_factor, finish, title, five_round)?;
             }
         }
         return Ok(());
@@ -139,16 +181,32 @@ async fn main() -> anyhow::Result<()> {
 async fn run_sync(database: &Database, force: bool) -> anyhow::Result<()> {
     let options = SyncOptions { force };
 
+    // Load the active config (saved or default)
+    let config = EloConfig::load();
+    let config_status = if config.is_custom() {
+        format!("custom ({})", config.summary())
+    } else {
+        "default".to_string()
+    };
+
+    println!("Active Elo Config: {}", config_status);
+    println!();
+
     println!("Syncing fight data from ESPN...\n");
     sync_fight_data(database, &options).await?;
 
     println!("\nResetting ratings...");
     database.reset_ratings().await?;
 
-    println!("Calculating ratings...");
-    update_ratings(database, &EloConfig::default()).await?;
+    println!("Calculating ratings with active config...");
+    update_ratings(database, &config).await?;
 
-    println!("Done! Run without --sync to view rankings.");
+    println!("\nDone! Run without --sync to view rankings.");
+
+    if !config.is_custom() {
+        println!("\nTip: Use 'optimize --apply' to find and apply optimal parameters.");
+    }
+
     Ok(())
 }
 
@@ -160,6 +218,7 @@ async fn run_optimize(
     seed: u64,
     export: Option<String>,
     top: usize,
+    apply: bool,
 ) -> anyhow::Result<()> {
     println!("Loading fight data...");
     let fights = database.get_fights_order_by_date().await?;
@@ -224,6 +283,24 @@ async fn run_optimize(
         println!("\nResults exported to: {}", path);
     }
 
+    // Apply best config if requested
+    if apply {
+        best.config.save()?;
+        println!("\nBest configuration saved!");
+        println!("Run 'sync' to recalculate rankings with the new config.");
+    } else {
+        println!("\nTo apply this config, run:");
+        println!("  cargo run -- optimize --apply");
+        println!("\nOr manually set it with:");
+        println!(
+            "  cargo run -- config --k-factor {:.0} --finish {:.2} --title {:.2} --five-round {:.2}",
+            best.config.k_factor,
+            best.config.finish_multiplier,
+            best.config.title_fight_multiplier,
+            best.config.five_round_multiplier
+        );
+    }
+
     Ok(())
 }
 
@@ -235,8 +312,6 @@ async fn run_backtest(
     title: f64,
     five_round: f64,
 ) -> anyhow::Result<()> {
-    use crate::engine::Backtester;
-
     println!("Loading fight data...");
     let fights = database.get_fights_order_by_date().await?;
 
@@ -271,6 +346,88 @@ async fn run_backtest(
         "  Accuracy:         {:.2}%",
         result.metrics.accuracy * 100.0
     );
+
+    Ok(())
+}
+
+/// Manages the Elo configuration.
+fn run_config(
+    show: bool,
+    reset: bool,
+    k_factor: Option<f64>,
+    finish: Option<f64>,
+    title: Option<f64>,
+    five_round: Option<f64>,
+) -> anyhow::Result<()> {
+    // Reset config
+    if reset {
+        EloConfig::reset()?;
+        println!("Configuration reset to defaults.");
+        println!();
+    }
+
+    // Load current config
+    let mut config = EloConfig::load();
+
+    // Apply any updates
+    let mut modified = false;
+    if let Some(k) = k_factor {
+        config.k_factor = k;
+        modified = true;
+    }
+    if let Some(f) = finish {
+        config.finish_multiplier = f;
+        modified = true;
+    }
+    if let Some(t) = title {
+        config.title_fight_multiplier = t;
+        modified = true;
+    }
+    if let Some(fr) = five_round {
+        config.five_round_multiplier = fr;
+        modified = true;
+    }
+
+    // Save if modified
+    if modified {
+        config.save()?;
+        println!("Configuration saved.");
+        println!();
+    }
+
+    // Show current config (default behavior)
+    if show || !modified && !reset {
+        let status = if config.is_custom() {
+            "Custom"
+        } else {
+            "Default"
+        };
+
+        println!("Active Elo Configuration ({})", status);
+        println!("{:-<40}", "");
+        println!("  K-Factor:              {:.2}", config.k_factor);
+        println!("  Finish Multiplier:     {:.2}", config.finish_multiplier);
+        println!(
+            "  Title Fight Multiplier:{:.2}",
+            config.title_fight_multiplier
+        );
+        println!(
+            "  Five Round Multiplier: {:.2}",
+            config.five_round_multiplier
+        );
+        println!();
+
+        if EloConfig::exists() {
+            println!("Config file: data/elo_config.json");
+        } else {
+            println!("No config file (using defaults)");
+        }
+
+        if modified || reset {
+            println!();
+            println!("Run 'sync' to apply changes to rankings.");
+        }
+    }
 
     Ok(())
 }

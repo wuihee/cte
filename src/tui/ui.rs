@@ -8,12 +8,12 @@ use ratatui::{
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
     widgets::{
-        Block, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+        Block, Borders, Cell, Clear, Gauge, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table,
     },
 };
 
-use super::app::{App, Tab, View, WEIGHT_CLASSES};
+use super::app::{App, OptimizationMethod, Tab, View, WEIGHT_CLASSES};
 
 /// Main draw function.
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -21,6 +21,11 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Rankings => draw_rankings(frame, app),
         View::FighterDetail => draw_fighter_detail(frame, app),
         View::Predictions => draw_predictions(frame, app),
+        View::Optimize => draw_optimize(frame, app),
+        View::BacktestConfig => {
+            draw_optimize(frame, app);
+            draw_backtest_config(frame, app);
+        }
     }
 
     // Draw search overlay if in search mode
@@ -174,7 +179,7 @@ fn draw_rankings(frame: &mut Frame, app: &App) {
         Span::styled(" q ", Style::default().bg(Color::DarkGray)),
         Span::raw(" Quit  "),
         Span::styled(" Tab ", Style::default().bg(Color::DarkGray)),
-        Span::raw(" Predictions  "),
+        Span::raw(" Next Tab  "),
         Span::styled(" ↑/↓ ", Style::default().bg(Color::DarkGray)),
         Span::raw(" Navigate  "),
         Span::styled(" ←/→ ", Style::default().bg(Color::DarkGray)),
@@ -385,6 +390,12 @@ fn draw_header_with_tabs(frame: &mut Frame, area: Rect, current_tab: Tab) {
         Style::default().fg(Color::DarkGray)
     };
 
+    let optimize_style = if current_tab == Tab::Optimize {
+        Style::default().fg(Color::Yellow).bold()
+    } else {
+        Style::default().fg(Color::DarkGray)
+    };
+
     let header = Paragraph::new(Text::from(vec![Line::from(vec![
         Span::styled(
             " COMBAT TRAINING ENGINE ",
@@ -396,6 +407,8 @@ fn draw_header_with_tabs(frame: &mut Frame, area: Rect, current_tab: Tab) {
         Span::styled("[ Rankings ]", rankings_style),
         Span::raw("  "),
         Span::styled("[ Predictions ]", predictions_style),
+        Span::raw("  "),
+        Span::styled("[ Optimize ]", optimize_style),
     ])]))
     .alignment(Alignment::Center)
     .block(
@@ -495,7 +508,7 @@ fn draw_predictions(frame: &mut Frame, app: &App) {
         Span::styled(" q ", Style::default().bg(Color::DarkGray)),
         Span::raw(" Quit  "),
         Span::styled(" Tab ", Style::default().bg(Color::DarkGray)),
-        Span::raw(" Rankings  "),
+        Span::raw(" Next Tab  "),
         Span::styled(" ←/→ ", Style::default().bg(Color::DarkGray)),
         Span::raw(" Change Event  "),
         Span::styled(" r ", Style::default().bg(Color::DarkGray)),
@@ -599,6 +612,409 @@ fn draw_fight_predictions(frame: &mut Frame, area: Rect, event: &crate::engine::
     frame.render_widget(table, area);
 }
 
+/// Draws the optimize view.
+fn draw_optimize(frame: &mut Frame, app: &App) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3), // Header with tabs
+            Constraint::Length(3), // Active config display
+            Constraint::Length(3), // Method selector
+            Constraint::Length(3), // Progress bar / status
+            Constraint::Min(10),   // Results table
+            Constraint::Length(3), // Help bar
+        ])
+        .split(frame.area());
+
+    // Header with tabs
+    draw_header_with_tabs(frame, chunks[0], app.tab);
+
+    // Active config display
+    let config_status = if app.active_config.is_custom() {
+        format!("Active Config: {} ", app.active_config.summary())
+    } else {
+        "Active Config: Default ".to_string()
+    };
+    let resync_note = if app.needs_resync {
+        "(needs re-sync)"
+    } else {
+        ""
+    };
+    let config_display = Paragraph::new(format!("{}{}", config_status, resync_note))
+        .alignment(Alignment::Center)
+        .style(if app.needs_resync {
+            Style::default().fg(Color::Yellow)
+        } else if app.active_config.is_custom() {
+            Style::default().fg(Color::Green)
+        } else {
+            Style::default()
+        })
+        .block(
+            Block::default()
+                .title(" Current Elo Configuration ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+    frame.render_widget(config_display, chunks[1]);
+
+    // Method selector
+    let method_text = match app.optimization_method {
+        OptimizationMethod::Grid => format!("< {} > (240 configs)", app.optimization_method.name()),
+        OptimizationMethod::Random => format!(
+            "< {} > ({} samples, +/- to adjust)",
+            app.optimization_method.name(),
+            app.random_samples
+        ),
+    };
+
+    let method_selector = Paragraph::new(method_text)
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .title(" Optimization Method (m to toggle) ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Magenta)),
+        );
+    frame.render_widget(method_selector, chunks[2]);
+
+    // Progress bar / Status
+    if app.optimization_running {
+        let (current, total) = app.optimization_progress;
+        let ratio = if total > 0 {
+            current as f64 / total as f64
+        } else {
+            0.0
+        };
+
+        let config_info = app
+            .optimization_current_config
+            .as_ref()
+            .map(|c| {
+                format!(
+                    " K={:.0} F={:.2} T={:.2} 5R={:.2}",
+                    c.k_factor,
+                    c.finish_multiplier,
+                    c.title_fight_multiplier,
+                    c.five_round_multiplier
+                )
+            })
+            .unwrap_or_default();
+
+        let progress = Gauge::default()
+            .block(
+                Block::default()
+                    .title(format!(
+                        " Progress: {}/{} ({:.1}%){}",
+                        current,
+                        total,
+                        ratio * 100.0,
+                        config_info
+                    ))
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Yellow)),
+            )
+            .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+            .ratio(ratio);
+        frame.render_widget(progress, chunks[3]);
+    } else if let Some((ref message, is_success)) = app.optimization_message {
+        let msg = Paragraph::new(message.as_str())
+            .alignment(Alignment::Center)
+            .style(if is_success {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::Red)
+            })
+            .block(
+                Block::default()
+                    .title(" Status ")
+                    .borders(Borders::ALL)
+                    .border_style(if is_success {
+                        Style::default().fg(Color::Green)
+                    } else {
+                        Style::default().fg(Color::Red)
+                    }),
+            );
+        frame.render_widget(msg, chunks[3]);
+    } else {
+        let status = if app.optimization_results.is_empty() {
+            "Press 'r' to run optimization"
+        } else {
+            "Optimization complete! Press 'a' to apply best config"
+        };
+        let status_bar = Paragraph::new(status).alignment(Alignment::Center).block(
+            Block::default()
+                .title(" Status ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green)),
+        );
+        frame.render_widget(status_bar, chunks[3]);
+    }
+
+    // Results table
+    draw_optimization_results(frame, chunks[4], app);
+
+    // Help bar
+    let help_text = if app.optimization_running {
+        vec![
+            Span::styled(" q ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Quit  "),
+            Span::raw("(Optimization in progress...)"),
+        ]
+    } else {
+        vec![
+            Span::styled(" q ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Quit  "),
+            Span::styled(" Tab ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Tab  "),
+            Span::styled(" r ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Run  "),
+            Span::styled(" a ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Apply  "),
+            Span::styled(" Enter ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Test  "),
+            Span::styled(" e ", Style::default().bg(Color::DarkGray)),
+            Span::raw(" Export  "),
+        ]
+    };
+
+    let help = Paragraph::new(Line::from(help_text))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::ALL));
+    frame.render_widget(help, chunks[5]);
+}
+
+/// Draws optimization results table.
+fn draw_optimization_results(frame: &mut Frame, area: Rect, app: &App) {
+    if app.optimization_results.is_empty() {
+        let empty = Paragraph::new("No results yet. Run optimization to see results.")
+            .alignment(Alignment::Center)
+            .block(
+                Block::default()
+                    .title(" Results ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Green)),
+            );
+        frame.render_widget(empty, area);
+        return;
+    }
+
+    let header_cells = [
+        "#", "K-Factor", "Finish", "Title", "5-Round", "Log Loss", "Brier", "Accuracy",
+    ]
+    .iter()
+    .map(|h| Cell::from(*h).style(Style::default().fg(Color::Yellow).bold()));
+    let header_row = Row::new(header_cells).height(1).bottom_margin(1);
+
+    let visible_height = area.height.saturating_sub(4) as usize;
+
+    // Adjust scroll offset based on selection
+    let scroll_offset = if app.selected_result_index >= app.results_scroll_offset + visible_height {
+        app.selected_result_index.saturating_sub(visible_height - 1)
+    } else if app.selected_result_index < app.results_scroll_offset {
+        app.selected_result_index
+    } else {
+        app.results_scroll_offset
+    };
+
+    let rows: Vec<Row> = app
+        .optimization_results
+        .iter()
+        .enumerate()
+        .skip(scroll_offset)
+        .take(visible_height)
+        .map(|(i, result)| {
+            let is_selected = i == app.selected_result_index;
+            let is_best = i == 0;
+
+            let style = if is_selected {
+                Style::default()
+                    .bg(Color::DarkGray)
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
+            } else if is_best {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default()
+            };
+
+            Row::new(vec![
+                Cell::from(format!("{}", i + 1)),
+                Cell::from(format!("{:.0}", result.config.k_factor)),
+                Cell::from(format!("{:.2}", result.config.finish_multiplier)),
+                Cell::from(format!("{:.2}", result.config.title_fight_multiplier)),
+                Cell::from(format!("{:.2}", result.config.five_round_multiplier)),
+                Cell::from(format!("{:.4}", result.log_loss)),
+                Cell::from(format!("{:.4}", result.brier_score)),
+                Cell::from(format!("{:.2}%", result.accuracy * 100.0)),
+            ])
+            .style(style)
+        })
+        .collect();
+
+    let table = Table::new(
+        rows,
+        [
+            Constraint::Length(4),  // #
+            Constraint::Length(9),  // K-Factor
+            Constraint::Length(8),  // Finish
+            Constraint::Length(7),  // Title
+            Constraint::Length(8),  // 5-Round
+            Constraint::Length(10), // Log Loss
+            Constraint::Length(8),  // Brier
+            Constraint::Length(10), // Accuracy
+        ],
+    )
+    .header(header_row)
+    .block(
+        Block::default()
+            .title(format!(
+                " Results ({} configs, sorted by log loss) ",
+                app.optimization_results.len()
+            ))
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Green)),
+    );
+
+    frame.render_widget(table, area);
+
+    // Scrollbar
+    if app.optimization_results.len() > visible_height {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("▲"))
+            .end_symbol(Some("▼"));
+
+        let mut scrollbar_state =
+            ScrollbarState::new(app.optimization_results.len()).position(app.selected_result_index);
+
+        frame.render_stateful_widget(
+            scrollbar,
+            area.inner(ratatui::layout::Margin {
+                vertical: 1,
+                horizontal: 0,
+            }),
+            &mut scrollbar_state,
+        );
+    }
+}
+
+/// Draws the backtest configuration modal.
+fn draw_backtest_config(frame: &mut Frame, app: &App) {
+    let area = centered_rect(60, 16, frame.area());
+    frame.render_widget(Clear, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(2), // K-Factor
+            Constraint::Length(2), // Finish
+            Constraint::Length(2), // Title
+            Constraint::Length(2), // 5-Round
+            Constraint::Length(1), // Spacer
+            Constraint::Min(4),    // Results
+            Constraint::Length(2), // Help
+        ])
+        .split(area);
+
+    let block = Block::default()
+        .title(" Custom Backtest ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    frame.render_widget(block, area);
+
+    // Config fields
+    let fields = [
+        ("K-Factor:", format!("{:.1}", app.backtest_config.k_factor)),
+        (
+            "Finish Multiplier:",
+            format!("{:.2}", app.backtest_config.finish_multiplier),
+        ),
+        (
+            "Title Multiplier:",
+            format!("{:.2}", app.backtest_config.title_fight_multiplier),
+        ),
+        (
+            "5-Round Multiplier:",
+            format!("{:.2}", app.backtest_config.five_round_multiplier),
+        ),
+    ];
+
+    for (i, (label, value)) in fields.iter().enumerate() {
+        let is_selected = i == app.config_field_index;
+        let style = if is_selected {
+            Style::default().fg(Color::Yellow).bold()
+        } else {
+            Style::default()
+        };
+
+        let arrow = if is_selected { ">" } else { " " };
+        let text = format!("{} {:<20} < {} >", arrow, label, value);
+        let para = Paragraph::new(text).style(style);
+        frame.render_widget(para, chunks[i]);
+    }
+
+    // Results
+    let result_text = if let Some(ref result) = app.backtest_result {
+        vec![
+            Line::from(vec![
+                Span::raw("Log Loss:   "),
+                Span::styled(
+                    format!("{:.4}", result.log_loss),
+                    Style::default().fg(Color::Cyan).bold(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("Brier:      "),
+                Span::styled(
+                    format!("{:.4}", result.brier_score),
+                    Style::default().fg(Color::Cyan).bold(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("Accuracy:   "),
+                Span::styled(
+                    format!("{:.2}%", result.accuracy * 100.0),
+                    Style::default().fg(Color::Cyan).bold(),
+                ),
+            ]),
+            Line::from(vec![
+                Span::raw("Fights:     "),
+                Span::styled(
+                    format!("{}", result.fights_processed),
+                    Style::default().fg(Color::Cyan),
+                ),
+            ]),
+        ]
+    } else {
+        vec![Line::from("Press Enter to run backtest")]
+    };
+
+    let results = Paragraph::new(result_text).block(
+        Block::default()
+            .title(" Results ")
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Green)),
+    );
+    frame.render_widget(results, chunks[5]);
+
+    // Help
+    let help = Paragraph::new(Line::from(vec![
+        Span::styled(" ↑/↓ ", Style::default().bg(Color::DarkGray)),
+        Span::raw(" Select  "),
+        Span::styled(" ←/→ ", Style::default().bg(Color::DarkGray)),
+        Span::raw(" Adjust  "),
+        Span::styled(" Enter ", Style::default().bg(Color::DarkGray)),
+        Span::raw(" Test  "),
+        Span::styled(" s ", Style::default().bg(Color::DarkGray)),
+        Span::raw(" Save  "),
+        Span::styled(" Esc ", Style::default().bg(Color::DarkGray)),
+        Span::raw(" Back  "),
+    ]))
+    .alignment(Alignment::Center);
+    frame.render_widget(help, chunks[6]);
+}
+
 /// Gets a color based on rating value.
 fn get_rating_color(rating: f64) -> Color {
     if rating >= 1150.0 {
@@ -650,7 +1066,7 @@ fn centered_rect(percent_x: u16, height: u16, area: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length((area.height - height) / 2),
+            Constraint::Length((area.height.saturating_sub(height)) / 2),
             Constraint::Length(height),
             Constraint::Min(0),
         ])
