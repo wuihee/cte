@@ -608,10 +608,7 @@ impl App {
     async fn handle_optimize_key(&mut self, key: KeyCode) -> anyhow::Result<()> {
         // Don't allow most actions while optimization is running
         if self.optimization_running {
-            match key {
-                KeyCode::Char('q') => self.should_quit = true,
-                _ => {}
-            }
+            if let KeyCode::Char('q') = key { self.should_quit = true }
             return Ok(());
         }
 
