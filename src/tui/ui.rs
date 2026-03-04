@@ -605,12 +605,8 @@ fn get_rating_color(rating: f64) -> Color {
         Color::Rgb(255, 215, 0) // Gold
     } else if rating >= 1100.0 {
         Color::Green
-    } else if rating >= 1050.0 {
-        Color::White
-    } else if rating >= 950.0 {
-        Color::Yellow
     } else {
-        Color::Red
+        Color::White
     }
 }
 
