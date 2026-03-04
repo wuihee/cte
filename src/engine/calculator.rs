@@ -3,34 +3,31 @@
 //! Calculates fighter ratings using an enhanced Elo system.
 //!
 //! Features:
+//! - Configurable K-factor and multipliers via EloConfig
 //! - Dynamic K-factor based on fighter experience
 //! - Finish bonuses (KO/TKO/Submissions)
-//! - Early finish bonuses
+//! - Title fight and five-round fight multipliers
 //! - Expectation-weighted performance multiplier
 
 use crate::database::Database;
+use crate::engine::config::EloConfig;
 
-/// Base K-factor for rating changes.
-const BASE_K: f64 = 32.0;
-
-/// Minimum K-factor for experienced fighters.
-const MIN_K: f64 = 16.0;
+/// Minimum K-factor for experienced fighters (used in dynamic K calculation).
+const MIN_K_RATIO: f64 = 0.5;
 
 /// Number of fights before K-factor stabilizes.
 const K_STABILIZE_FIGHTS: f64 = 15.0;
 
-/// Finish bonuses.
-const KO_BONUS: f64 = 1.05;
-const SUB_BONUS: f64 = 1.05;
-
-/// Bonus for first-round finishes.
-const FIRST_ROUND_BONUS: f64 = 1.02;
-
 /// Maximum performance multiplier.
-const MAX_MULTIPLIER: f64 = 1.15;
+const MAX_MULTIPLIER: f64 = 1.25;
 
-/// Updates all fighter ratings based on fight history.
-pub async fn update_ratings(database: &Database) -> anyhow::Result<()> {
+/// Updates all fighter ratings based on fight history using the given configuration.
+///
+/// # Arguments
+///
+/// * `database` - Database connection for retrieving fights and updating ratings.
+/// * `config` - Elo configuration parameters.
+pub async fn update_ratings(database: &Database, config: &EloConfig) -> anyhow::Result<()> {
     let fights = database.get_fights_order_by_date().await?;
 
     for fight in fights {
@@ -44,11 +41,17 @@ pub async fn update_ratings(database: &Database) -> anyhow::Result<()> {
         let winner_fights = (winner.wins + winner.losses) as f64;
         let loser_fights = (loser.wins + loser.losses) as f64;
 
-        let k = (dynamic_k_factor(winner_fights) + dynamic_k_factor(loser_fights)) / 2.0;
+        let k = (dynamic_k_factor(config.k_factor, winner_fights)
+            + dynamic_k_factor(config.k_factor, loser_fights))
+            / 2.0;
 
         // --- Performance multiplier ---
-        let raw_multiplier =
-            performance_multiplier(fight.finish_method.as_deref(), fight.fight_time);
+        let raw_multiplier = performance_multiplier(
+            config,
+            fight.finish_method.as_deref(),
+            fight.weight_class.as_deref(),
+            fight.fight_time,
+        );
 
         // Weight multiplier by expectation
         let multiplier = expectation_weighted_multiplier(raw_multiplier, expected);
@@ -98,34 +101,65 @@ pub async fn update_ratings(database: &Database) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Updates all fighter ratings using default configuration.
+///
+/// This is a convenience function that uses `EloConfig::default()`.
+#[allow(dead_code)]
+pub async fn update_ratings_default(database: &Database) -> anyhow::Result<()> {
+    update_ratings(database, &EloConfig::default()).await
+}
+
 /// Standard Elo expected score formula.
+///
+/// Returns the probability that fighter A wins against fighter B.
 pub fn expected_score(rating_a: f64, rating_b: f64) -> f64 {
     1.0 / (1.0 + 10f64.powf((rating_b - rating_a) / 400.0))
 }
 
 /// Dynamic K-factor based on fighter experience.
-pub fn dynamic_k_factor(fight_count: f64) -> f64 {
+///
+/// New fighters have higher K (more volatile ratings).
+/// Veterans have lower K (more stable ratings).
+pub fn dynamic_k_factor(base_k: f64, fight_count: f64) -> f64 {
+    let min_k = base_k * MIN_K_RATIO;
     let factor = (K_STABILIZE_FIGHTS - fight_count).max(0.0) / K_STABILIZE_FIGHTS;
-    MIN_K + (BASE_K - MIN_K) * factor
+    min_k + (base_k - min_k) * factor
 }
 
-/// Calculates base performance multiplier from fight outcome.
-fn performance_multiplier(finish_method: Option<&str>, fight_time: i64) -> f64 {
+/// Calculates performance multiplier from fight outcome and context.
+///
+/// Applies finish, title fight, and five-round fight multipliers.
+fn performance_multiplier(
+    config: &EloConfig,
+    finish_method: Option<&str>,
+    weight_class: Option<&str>,
+    fight_time: i64,
+) -> f64 {
     let mut multiplier = 1.0;
 
+    // Check for finish (KO/TKO/Submission)
     if let Some(method) = finish_method {
-        let method = method.to_ascii_uppercase();
-
-        if method.contains("KO") || method.contains("TKO") {
-            multiplier *= KO_BONUS;
-        } else if method.contains("SUB") {
-            multiplier *= SUB_BONUS;
+        let method_upper = method.to_ascii_uppercase();
+        if method_upper.contains("KO")
+            || method_upper.contains("TKO")
+            || method_upper.contains("SUB")
+        {
+            multiplier *= config.finish_multiplier;
         }
     }
 
-    // First round finish (<= 5 minutes)
-    if fight_time > 0 && fight_time <= 300 {
-        multiplier *= FIRST_ROUND_BONUS;
+    // Check for title fight (heuristic: weight class contains "title" or "championship")
+    if let Some(wc) = weight_class {
+        let wc_upper = wc.to_ascii_uppercase();
+        if wc_upper.contains("TITLE") || wc_upper.contains("CHAMPIONSHIP") {
+            multiplier *= config.title_fight_multiplier;
+        }
+    }
+
+    // Check for five-round fight (fight time > 15 minutes indicates scheduled for 5 rounds)
+    // This is a heuristic - fights that go past round 3 (15 min) are likely 5-rounders
+    if fight_time > 900 {
+        multiplier *= config.five_round_multiplier;
     }
 
     multiplier.min(MAX_MULTIPLIER)
@@ -145,4 +179,34 @@ fn expectation_weighted_multiplier(multiplier: f64, expected: f64) -> f64 {
     let scaled_bonus = bonus * (1.0 - expected);
 
     (1.0 + scaled_bonus).min(MAX_MULTIPLIER)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_expected_score_equal_ratings() {
+        let score = expected_score(1000.0, 1000.0);
+        assert!((score - 0.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_expected_score_higher_rating() {
+        let score = expected_score(1200.0, 1000.0);
+        assert!(score > 0.5);
+        assert!(score < 1.0);
+    }
+
+    #[test]
+    fn test_dynamic_k_factor() {
+        let base_k = 32.0;
+        // New fighter should have higher K
+        let new_k = dynamic_k_factor(base_k, 0.0);
+        assert_eq!(new_k, base_k);
+
+        // Veteran should have lower K
+        let vet_k = dynamic_k_factor(base_k, 20.0);
+        assert_eq!(vet_k, base_k * MIN_K_RATIO);
+    }
 }
