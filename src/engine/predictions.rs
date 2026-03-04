@@ -3,9 +3,9 @@
 //! This module provides fight predictions based on Elo ratings.
 
 use crate::database::Database;
-use crate::espn::dto::fight_card::CompetitorDto;
-use crate::espn::dto::EventDto;
 use crate::espn::Espn;
+use crate::espn::dto::EventDto;
+use crate::espn::dto::fight_card::CompetitorDto;
 
 /// A predicted fight outcome.
 #[derive(Debug, Clone)]
@@ -104,8 +104,7 @@ async fn get_event_prediction(
         // Process main card
         for competition in &cards.main.competitions {
             if competition.competitors.len() >= 2 {
-                let prediction =
-                    create_fight_prediction(database, &competition.competitors).await;
+                let prediction = create_fight_prediction(database, &competition.competitors).await;
                 fights.push(prediction);
             }
         }

@@ -12,7 +12,7 @@ use crossterm::{
 use ratatui::{Terminal, backend::CrosstermBackend};
 
 use crate::database::{Database, entities::Fighter};
-use crate::engine::{get_upcoming_predictions, EventPrediction};
+use crate::engine::{EventPrediction, get_upcoming_predictions};
 
 use super::ui;
 

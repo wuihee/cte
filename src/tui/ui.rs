@@ -3,6 +3,7 @@
 //! UI rendering for the TUI application.
 
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
@@ -10,7 +11,6 @@ use ratatui::{
         Block, Borders, Cell, Clear, Paragraph, Row, Scrollbar, ScrollbarOrientation,
         ScrollbarState, Table,
     },
-    Frame,
 };
 
 use super::app::{App, Tab, View, WEIGHT_CLASSES};

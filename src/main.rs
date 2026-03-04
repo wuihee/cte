@@ -7,7 +7,7 @@ use std::env;
 
 use crate::{
     database::Database,
-    engine::{sync_fight_data, update_ratings, SyncOptions},
+    engine::{SyncOptions, sync_fight_data, update_ratings},
     tui::run_app,
 };
 

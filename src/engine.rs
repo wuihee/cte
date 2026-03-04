@@ -7,5 +7,5 @@ pub mod predictions;
 pub mod sync;
 
 pub use calculator::update_ratings;
-pub use predictions::{get_upcoming_predictions, EventPrediction};
-pub use sync::{sync_fight_data, SyncOptions};
+pub use predictions::{EventPrediction, get_upcoming_predictions};
+pub use sync::{SyncOptions, sync_fight_data};

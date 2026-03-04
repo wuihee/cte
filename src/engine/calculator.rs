@@ -272,7 +272,6 @@ mod tests {
         (a - b).abs() < tolerance
     }
 
-
     fn test_expected_score_equal_ratings() {
         // Equal ratings should give 50% expected score
         let score = expected_score(1000.0, 1000.0);
@@ -318,7 +317,6 @@ mod tests {
         assert!(score < 1.0);
     }
 
-
     fn test_k_factor_new_fighter() {
         // New fighter (0 fights) should have max K-factor
         let k = dynamic_k_factor(0.0);
@@ -360,7 +358,6 @@ mod tests {
         assert!(k_10 > k_15);
     }
 
-
     fn test_finish_bonus_ko() {
         assert!(approx_eq(finish_bonus(Some("KO")), KO_BONUS, 0.001));
         assert!(approx_eq(finish_bonus(Some("ko")), KO_BONUS, 0.001));
@@ -376,7 +373,11 @@ mod tests {
     #[test]
     fn test_finish_bonus_submission() {
         assert!(approx_eq(finish_bonus(Some("SUB")), SUB_BONUS, 0.001));
-        assert!(approx_eq(finish_bonus(Some("Submission")), SUB_BONUS, 0.001));
+        assert!(approx_eq(
+            finish_bonus(Some("Submission")),
+            SUB_BONUS,
+            0.001
+        ));
         assert!(approx_eq(finish_bonus(Some("sub")), SUB_BONUS, 0.001));
     }
 
@@ -391,7 +392,6 @@ mod tests {
     fn test_finish_bonus_none() {
         assert!(approx_eq(finish_bonus(None), 1.0, 0.001));
     }
-
 
     fn test_early_finish_bonus_first_round() {
         // Under 5 minutes (300 seconds) should get bonus
@@ -419,7 +419,6 @@ mod tests {
         // Negative time (invalid) should not get bonus
         assert!(approx_eq(early_finish_bonus(-100), 1.0, 0.001));
     }
-
 
     fn test_upset_victory_rating_change() {
         // Underdog wins - should gain more points
