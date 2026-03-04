@@ -9,7 +9,7 @@ use std::env;
 use sqlx::SqlitePool;
 use time::OffsetDateTime;
 
-use crate::database::entities::{Fight, FightStats, Fighter};
+use crate::database::entities::{Fight, Fighter};
 
 /// Encapsulates the applications main database connection via [`SqlitePool`].
 pub struct Database {
@@ -356,38 +356,6 @@ impl Database {
         Ok(())
     }
 
-    /// Get fight statistics for a specific fighter in a specific fight.
-    ///
-    /// # Arguments
-    ///
-    /// - `fighter_id`: Fighter's ID.
-    /// - `fight_id`: Fight's ID.
-    ///
-    /// # Returns
-    ///
-    /// `Ok(FightStats)` if found, else `Err`.
-    pub async fn get_fight_stats(
-        &self,
-        fighter_id: i64,
-        fight_id: i64,
-    ) -> sqlx::Result<Option<FightStats>> {
-        let stats = sqlx::query_as!(
-            FightStats,
-            r#"
-            SELECT id, fighter_id, fight_id, knock_downs, total_strikes_hit, total_strikes_missed,
-                   sig_strikes, head_strikes, body_strikes, leg_strikes, time_in_control,
-                   takedowns_hit, takedowns_missed, submissions_hit, submissions_missed
-            FROM fight_stats
-            WHERE fighter_id = $1 AND fight_id = $2
-            "#,
-            fighter_id,
-            fight_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-        Ok(stats)
-    }
-
     /// Get all fighters ordered by rating (descending).
     ///
     /// # Returns
@@ -519,6 +487,31 @@ impl Database {
         sqlx::query!("DELETE FROM sync_log")
             .execute(&self.pool)
             .await?;
+        Ok(())
+    }
+
+    /// Reset all fighter ratings to starting values.
+    /// Clears rating history to prevent compounding.
+    pub async fn reset_ratings(&self) -> sqlx::Result<()> {
+        sqlx::query!(
+            r#"
+            UPDATE fighters SET
+                rating = 1000,
+                max_rating = 1000,
+                wins = 0,
+                losses = 0,
+                ko_wins = 0,
+                sub_wins = 0,
+                dec_wins = 0
+            "#
+        )
+        .execute(&self.pool)
+        .await?;
+
+        sqlx::query!("DELETE FROM ratings")
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
     }
 }

@@ -601,13 +601,13 @@ fn draw_fight_predictions(frame: &mut Frame, area: Rect, event: &crate::engine::
 
 /// Gets a color based on rating value.
 fn get_rating_color(rating: f64) -> Color {
-    if rating >= 1400.0 {
+    if rating >= 1150.0 {
         Color::Rgb(255, 215, 0) // Gold
-    } else if rating >= 1200.0 {
+    } else if rating >= 1100.0 {
         Color::Green
-    } else if rating >= 1000.0 {
+    } else if rating >= 1050.0 {
         Color::White
-    } else if rating >= 800.0 {
+    } else if rating >= 950.0 {
         Color::Yellow
     } else {
         Color::Red

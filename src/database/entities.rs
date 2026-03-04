@@ -8,5 +8,4 @@ pub mod fighter;
 pub mod rating;
 
 pub use fight::Fight;
-pub use fight_stats::FightStats;
 pub use fighter::Fighter;
