@@ -150,8 +150,8 @@ async fn insert_card(database: &Database, event: &EventDto, card: &CardDto) -> a
             .map_or("", |w| &w.slug);
         let finish_method = &status.result.name;
 
-        insert_fighter(&database, competitor_1).await?;
-        insert_fighter(&database, competitor_2).await?;
+        insert_fighter(database, competitor_1).await?;
+        insert_fighter(database, competitor_2).await?;
 
         if competitor_1.winner {
             database
@@ -163,7 +163,7 @@ async fn insert_card(database: &Database, event: &EventDto, card: &CardDto) -> a
                     &event.date,
                     fight_time,
                     weight_class,
-                    &finish_method,
+                    finish_method,
                 )
                 .await?;
         } else {
@@ -176,7 +176,7 @@ async fn insert_card(database: &Database, event: &EventDto, card: &CardDto) -> a
                     &event.date,
                     fight_time,
                     weight_class,
-                    &finish_method,
+                    finish_method,
                 )
                 .await?;
         }
